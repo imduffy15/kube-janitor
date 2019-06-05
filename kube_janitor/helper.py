@@ -1,9 +1,8 @@
-import os
-
 import datetime
-import pykube
+import os
 import re
 
+import pykube
 
 TIME_UNIT_TO_SECONDS = {
     's': 1,
@@ -42,7 +41,7 @@ def parse_expiry(expiry: str) -> datetime:
         except ValueError:
             pass
     raise ValueError(
-            f'expiry value "{expiry}" does not match format 2019-02-25T09:26:14Z, 2019-02-25T09:26, or 2019-02-25')
+        f'expiry value "{expiry}" does not match format 2019-02-25T09:26:14Z, 2019-02-25T09:26, or 2019-02-25')
 
 
 def format_duration(seconds: int) -> str:

@@ -1,6 +1,8 @@
 FROM python:3.7-alpine3.9
 MAINTAINER Henning Jacobs <henning@jacobs1.de>
 
+RUN apk --no-cache add git gcc musl-dev g++
+
 WORKDIR /
 
 COPY Pipfile.lock /
@@ -11,6 +13,8 @@ RUN /pipenv-install.py && \
     rm -fr /usr/local/lib/python3.7/site-packages/setuptools
 
 FROM python:3.7-alpine3.9
+
+RUN apk --no-cache add libstdc++
 
 WORKDIR /
 

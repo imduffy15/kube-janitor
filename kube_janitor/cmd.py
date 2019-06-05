@@ -1,6 +1,5 @@
-import os
-
 import argparse
+import os
 
 DEFAULT_EXCLUDE_RESOURCES = 'events,controllerrevisions'
 DEFAULT_EXCLUDE_NAMESPACES = 'kube-system'
@@ -24,4 +23,6 @@ def get_parser():
                         default=os.getenv('EXCLUDE_NAMESPACES', DEFAULT_EXCLUDE_NAMESPACES))
     parser.add_argument('--rules-file', help='Load TTL rules from given file path',
                         default=os.getenv('RULES_FILE'))
+    parser.add_argument('--tiller-host', help='Tiller host', default=os.getenv('TILLER_HOST'))
+    parser.add_argument('--tiller-port', help='Tiller port', default=os.getenv('TILLER_PORT'))
     return parser

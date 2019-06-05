@@ -5,7 +5,8 @@ name = "pypi"
 
 [packages]
 jmespath = "*"
-pykube-ng = "*"
+pykube-ng = {extras = ["gcp"],version = "*"}
+pyhelm = {git = "https://github.com/imduffy15/pyhelm",ref = "master"}
 
 [dev-packages]
 flake8 = "*"

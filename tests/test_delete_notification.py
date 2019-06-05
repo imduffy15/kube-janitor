@@ -1,12 +1,13 @@
 import datetime
 import unittest
 
+from pykube import Namespace
+from pykube.utils import obj_merge
+
 from kube_janitor.janitor import (add_notification_flag,
                                   get_delete_notification_time, get_ttl_expiry_time,
                                   handle_resource_on_expiry,
                                   handle_resource_on_ttl, was_notified)
-from pykube import Namespace
-from pykube.utils import obj_merge
 
 
 class MockedNamespace(Namespace):
@@ -54,7 +55,7 @@ class TestDeleteNotification(unittest.TestCase):
         # Notification is 3 minutes: 180s. Has to notify after: 2019-03-11T11:12:00Z
         resource = Namespace(None, {'metadata': {'name': 'foo', 'annotations': {'janitor/ttl': '10m'}, 'creationTimestamp': '2019-03-11T11:05:00Z'}})
         delete_notification = 180
-        handle_resource_on_ttl(resource, [], delete_notification, dry_run=True)
+        handle_resource_on_ttl(resource, [], delete_notification, dry_run=True, tiller=None)
         mocked_add_notification_flag.assert_not_called()
 
     @unittest.mock.patch('kube_janitor.janitor.utcnow', return_value=datetime.datetime.strptime('2019-03-11T11:13:09Z', '%Y-%m-%dT%H:%M:%SZ'))
@@ -66,7 +67,7 @@ class TestDeleteNotification(unittest.TestCase):
         # Notification is 3 minutes: 180s. Has to notify after: 2019-03-11T11:12:00Z
         resource = Namespace(None, {'metadata': {'name': 'foo', 'annotations': {'janitor/ttl': '10m'}, 'creationTimestamp': '2019-03-11T11:05:00Z'}})
         delete_notification = 180
-        handle_resource_on_ttl(resource, [], delete_notification, dry_run=True)
+        handle_resource_on_ttl(resource, [], delete_notification, dry_run=True, tiller=None)
         mocked_add_notification_flag.assert_called()
 
     @unittest.mock.patch('kube_janitor.janitor.utcnow', return_value=datetime.datetime.strptime('2019-03-11T11:13:09Z', '%Y-%m-%dT%H:%M:%SZ'))
@@ -78,7 +79,7 @@ class TestDeleteNotification(unittest.TestCase):
         # Notification is 3 minutes: 180s. Has to notify after: 2019-03-11T11:12:00Z
         resource = MockedNamespace(None, {'metadata': {'name': 'foo', 'annotations': {'janitor/ttl': '10m'}, 'creationTimestamp': '2019-03-11T11:05:00Z'}})
         delete_notification = 180
-        handle_resource_on_ttl(resource, [], delete_notification, dry_run=True)
+        handle_resource_on_ttl(resource, [], delete_notification, dry_run=True, tiller=None)
         expire = datetime.datetime.strptime('2019-03-11T11:15:00Z', '%Y-%m-%dT%H:%M:%SZ')
         formatted_expire_datetime = expire.strftime('%Y-%m-%dT%H:%M:%SZ')
         reason = 'annotation janitor/ttl is set'

@@ -1,8 +1,10 @@
 import datetime
 import logging
 from collections import Counter
+from typing import Optional
 
 import pykube
+from pyhelm.tiller import Tiller
 from pykube import Event, Namespace
 
 from .helper import format_duration, parse_expiry, parse_ttl
@@ -107,7 +109,7 @@ def create_event(resource, message: str, reason: str, dry_run: bool):
             logger.error(f'Could not create event {event.obj}: {e}')
 
 
-def delete(resource, dry_run: bool):
+def delete(resource, dry_run: bool, tiller: Optional[Tiller] = None):
     if dry_run:
         logger.info(f'**DRY-RUN**: would delete {resource.kind} {resource.namespace}/{resource.name}')
     else:
@@ -115,12 +117,15 @@ def delete(resource, dry_run: bool):
         try:
             # force cascading delete also for older objects (e.g. extensions/v1beta1)
             # see https://kubernetes.io/docs/concepts/workloads/controllers/garbage-collection/#setting-the-cascading-deletion-policy
-            resource.delete(propagation_policy='Foreground')
+            if tiller and 'release' in resource.obj['metadata']['labels']:
+                tiller.uninstall_release(release=resource.obj['metadata']['labels']['release'], purge=True)
+            else:
+                resource.delete(propagation_policy='Foreground')
         except Exception as e:
             logger.error(f'Could not delete {resource.kind} {resource.namespace}/{resource.name}: {e}')
 
 
-def handle_resource_on_ttl(resource, rules, delete_notification: int, dry_run: bool):
+def handle_resource_on_ttl(resource, rules, delete_notification: int, dry_run: bool, tiller: Optional[Tiller]):
     counter = {'resources-processed': 1}
 
     ttl = resource.annotations.get(TTL_ANNOTATION)
@@ -149,7 +154,7 @@ def handle_resource_on_ttl(resource, rules, delete_notification: int, dry_run: b
                 message = f'{resource.kind} {resource.name} with {ttl} TTL is {age_formatted} old and will be deleted ({reason})'
                 logger.info(message)
                 create_event(resource, message, "TimeToLiveExpired", dry_run=dry_run)
-                delete(resource, dry_run=dry_run)
+                delete(resource, dry_run=dry_run, tiller=tiller)
                 counter[f'{resource.endpoint}-deleted'] = 1
             elif delete_notification:
                 expiry_time = get_ttl_expiry_time(resource, ttl_seconds)
@@ -160,7 +165,7 @@ def handle_resource_on_ttl(resource, rules, delete_notification: int, dry_run: b
     return counter
 
 
-def handle_resource_on_expiry(resource, rules, delete_notification: int, dry_run: bool):
+def handle_resource_on_expiry(resource, rules, delete_notification: int, dry_run: bool, tiller: Optional[Tiller] = None):
     counter = {}
 
     expiry = resource.annotations.get(EXPIRY_ANNOTATION)
@@ -177,7 +182,7 @@ def handle_resource_on_expiry(resource, rules, delete_notification: int, dry_run
                 message = f'{resource.kind} {resource.name} expired on {expiry} and will be deleted ({reason})'
                 logger.info(message)
                 create_event(resource, message, "ExpiryTimeReached", dry_run=dry_run)
-                delete(resource, dry_run=dry_run)
+                delete(resource, dry_run=dry_run, tiller=tiller)
                 counter[f'{resource.endpoint}-deleted'] = 1
             else:
                 logging.debug(f'{resource.kind} {resource.name} will expire on {expiry}')
@@ -196,14 +201,15 @@ def clean_up(api,
              exclude_namespaces: frozenset,
              rules: list,
              delete_notification: int,
-             dry_run: bool):
+             dry_run: bool,
+             tiller: Optional[Tiller] = None):
 
     counter = Counter()
 
     for namespace in Namespace.objects(api):
         if matches_resource_filter(namespace, include_resources, exclude_resources, include_namespaces, exclude_namespaces):
-            counter.update(handle_resource_on_ttl(namespace, rules, delete_notification, dry_run))
-            counter.update(handle_resource_on_expiry(namespace, rules, delete_notification, dry_run))
+            counter.update(handle_resource_on_ttl(namespace, rules, delete_notification, dry_run, tiller))
+            counter.update(handle_resource_on_expiry(namespace, rules, delete_notification, dry_run, tiller))
         else:
             logger.debug(f'Skipping {namespace.kind} {namespace}')
 
@@ -230,8 +236,9 @@ def clean_up(api,
                 logger.error(f'Could not list {_type.kind} objects: {e}')
 
     for resource in filtered_resources:
-        counter.update(handle_resource_on_ttl(resource, rules, delete_notification, dry_run))
-        counter.update(handle_resource_on_expiry(resource, rules, delete_notification, dry_run))
+        counter.update(handle_resource_on_ttl(resource, rules, delete_notification, dry_run, tiller))
+        counter.update(
+            handle_resource_on_expiry(resource, rules, delete_notification, dry_run, tiller))
     stats = ', '.join([f'{k}={v}' for k, v in counter.items()])
     logger.info(f'Clean up run completed: {stats}')
     return counter
